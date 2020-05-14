@@ -1,0 +1,268 @@
+swagger: "2.0"
+info:
+  description: "レジスタンス：オンラインのAPI"
+  version: "0.9.0"
+  title: "レジスタンス：オンライン"
+  
+basePath: "/api"
+tags:
+- name: "game master"
+  description: "ゲームマスター用のAPI"
+- name: "player"
+  description: "プレイヤー用のAPI"
+paths:
+  /create_room:
+    get:
+      tags:
+      - "game master"
+      summary: "ゲーム部屋の作成"
+      description: ""
+      parameters:
+      - 
+        in: "query"
+        name: "name"
+        description: "ゲームマスターの名前"
+        required: true
+        type: "string"
+        
+      responses:
+        200:
+          description: Successful responses
+          schema:
+            type: object
+            properties:
+              gameid:
+                type: "integer"
+                format: "int64"
+                example: 1
+              gmid:
+                type: "string"
+                example: "6234ba6839b1"
+  /start_game:
+    get:
+      tags:
+      - "game master"
+      summary: "ゲーム開始"
+      description: ""
+      parameters:
+      - 
+        in: "query"
+        name: "gameid"
+        description: "ゲームのid"
+        required: true
+        type: "string"
+      - 
+        in: "query"
+        name: "gmid"
+        description: "ゲームマスターのid"
+        required: true
+        type: "string"
+
+      responses:
+        200:
+          description: Successful responses
+  /finish_game:
+    get:
+      tags:
+      - "game master"
+      summary: "ゲーム終了"
+      description: ""
+      parameters:
+      - 
+        in: "query"
+        name: "gameid"
+        description: "ゲームのid"
+        required: true
+        type: "string"
+      - 
+        in: "query"
+        name: "gmid"
+        description: "ゲームマスターのid"
+        required: true
+        type: "string"
+
+      responses:
+        200:
+          description: Successful responses
+  /score_board:
+    get:
+      tags:
+      - "game master"
+      summary: "スコアボード設定"
+      description: ""
+      parameters:
+      - 
+        in: "query"
+        name: "gameid"
+        description: "ゲームのid"
+        required: true
+        type: "string"
+      - 
+        in: "query"
+        name: "no"
+        description: "ミッション番号"
+        required: true
+        type: "integer"
+      - 
+        in: "query"
+        name: "result"
+        description: "ミッション結果"
+        required: true
+        type: "string"
+        enum:
+        - "-"
+        - "NOW"
+        - "成功"
+        - "失敗"
+      
+      responses:
+        200:
+          description: Successful responses
+  
+  /mission_player:
+    get:
+      tags:
+      - "game master"
+      summary: "ミッションプレイヤー指定"
+      description: ""
+      parameters:
+      - 
+        in: "query"
+        name: "gameid"
+        description: "ゲームのid"
+        required: true
+        type: "string"
+      - 
+        in: "query"
+        name: "gmid"
+        description: "ゲームマスターのid"
+        required: true
+        type: "string"
+      - 
+        in: "query"
+        name: "player"
+        description: "ミッションに参加するプレイヤーID"
+        required: true
+        type: "string"
+      
+      responses:
+        200:
+          description: Successful responses
+          
+  /join:
+    get:
+      tags:
+      - "player"
+      summary: "ゲーム部屋への参加"
+      description: ""
+      #query, header, path, formData, body
+      parameters:
+      - in: "query"
+        name: "gameid"
+        description: "ゲームID"
+        required: true
+        type: integer
+      - in: "query"
+        name: "name"
+        description: "プレイヤーの名前"
+        required: true
+        type: string
+      responses:
+        200:
+          description: Successful responses
+          schema:
+            type: object
+            properties:
+              playerid:
+                type: "string"
+                example: "8b5771779474"
+  /gameinfo:
+    get:
+      tags:
+      - "player"
+      summary: "ゲーム情報の取得"
+      description: ""
+      #query, header, path, formData, body
+      parameters:
+      - in: "query"
+        name: "gameid"
+        description: "ゲームID"
+        required: true
+        type: integer
+      - in: "query"
+        name: "playerid"
+        description: "プレイヤーID"
+        required: true
+        type: string
+      responses:
+        200:
+          description: Successful responses
+          schema:
+            $ref: "#/definitions/Game"
+  /mission:
+    get:
+      tags:
+      - "player"
+      summary: "ミッション実行"
+      description: ""
+      parameters:
+      - in: "query"
+        name: "gameid"
+        description: "ゲームID"
+        required: true
+        type: integer
+      - in: "query"
+        name: "playerid"
+        description: "プレイヤーID"
+        required: true
+        type: string
+      - in: "query"
+        name: "value"
+        description: "実行ミッション"
+        required: true
+        type: string
+        enum:
+        - "遂行"
+        - "裏切り"
+      
+      responses:
+        200:
+          description: Successful responses
+          
+   
+definitions:
+  Game:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int64"
+      status:
+        type: "string"
+        description: "Game Status"
+        enum:
+        - "ready"
+        - "playing"
+        - "finished"
+      players:
+        type: array
+        items: 
+          $ref: "#/definitions/Player"
+      role:
+        type: "string"
+        enum:
+        - "resistance"
+        - "Spy"
+      message:
+        type: "string"
+    xml:
+      name: "Order"
+  Player:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+      name:
+        type: "string"
+    xml:
+      name: "Player"
