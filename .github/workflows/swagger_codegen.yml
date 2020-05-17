@@ -25,7 +25,7 @@ jobs:
       uses: bjerkio/swagger-codegen-action@v1
       with:
         # Arguments
-        args: generate -i doc/api/swagger.yml -l html -o doc/api
+        args: "generate -i doc/api/swagger.yml -l html -o doc/api"
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
