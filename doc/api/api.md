@@ -46,11 +46,11 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 {
   "status": "<INT: ステータスコード>",
   "data": "<JSON: アクションの結果>",
-  "state": "<現在のゲームのステート>"
+  "state": "<次のゲームのステート>"
 }
 ```
 
-ステータスコードは HTTP ステータスコードに従う  
+ステータスコードはなんとなく HTTP ステータスコードに従う  
 フロントエンドは `state` の部分を参照してゲームが今どのフェーズにいるのかを確認してほしい  
 
 
@@ -108,13 +108,13 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 <tr>
 <td class="org-right">5</td>
 <td class="org-left">assigning-cards</td>
-<td class="org-left">陰謀カードの割り当てを待つ</td>
+<td class="org-left">陰謀カードの割り当てを行う</td>
 </tr>
 
 
 <tr>
 <td class="org-right">6</td>
-<td class="org-left">immediate-effect</td>
+<td class="org-left">wait-immediate-effect</td>
 <td class="org-left">即時効果(「情報開示」、「責任者」、「立ち聞きされた会話」) の決定を待つ</td>
 </tr>
 
@@ -170,7 +170,14 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 
 <tr>
 <td class="org-right">14</td>
-<td class="org-left">wait-strong-leader</td>
+<td class="org-left">mission-completed</td>
+<td class="org-left">ミッションの完了、結果の閲覧待ち</td>
+</tr>
+
+
+<tr>
+<td class="org-right">15</td>
+<td class="org-left">wait-next-leader</td>
 <td class="org-left">「強力なリーダー」の使用有無を待つ</td>
 </tr>
 </tbody>
@@ -213,6 +220,8 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 
 ## join
 
+部屋番号を指定し、部屋への参加  
+
 
 ### Request
 
@@ -242,30 +251,28 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 ```
 
 
-## get-user
-
-
 # ゲーム操作系
 
 
 ## assign-role
+
+リーダーが役職を決定の開始を命令する  
 
 
 ### Request
 
 ```json
 {
-  "action": "assign-role"
-  "data": {
-	"roomId": "<部屋番号>"
-  }
+  "action": "assign-role",
+  "data": {}
+
 }
 ```
 
 
 ### Response
 
-全員にレスポンスがくる  
+レスポンスは全員にくる  
 レジスタンス側には `role` が `unknown` のレスポンスが来る  
 スパイ側は全員の `role` が記載されたレスポンスが来る  
 
@@ -290,14 +297,200 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 
 ## start
 
+役職確認後 GM によってゲームの開始を宣言  
+
 
 ### Request
 
 ```json
 {
-  "action": "start"
+  "action": "start",
+  "data": {}
+  }
+}
+```
+
+
+### Response
+
+全員に陰謀カードのリストが配られる  
+
+```json
+{
+  "status": "200",
   "data": {
-	"roomId": "<部屋番号>"
+	"plots": [ "<陰謀カードの Id>", ... ]
+  },
+  "state": "checking-plot"
+}
+```
+
+
+## checked-plots
+
+リーダーが実行する  
+次のステートをもらうだけ  
+
+
+### Request
+
+```json
+{
+  "action": "checked-plots",
+  "data": {}
+}
+```
+
+
+### Response
+
+「信用の確立」がある場合には、 `wait-trust` に遷移、なければ assign-cards に遷移  
+
+```json
+{
+  "status": "200",
+  "data": {},
+  "state": "wait-trust || assigning-cards"
+}
+```
+
+
+## execute-tust
+
+「信用の確立」を実行  
+
+
+### Request
+
+役割カードを開示するユーザー ID を指定  
+
+```json
+{
+  "action": "execute-trust",
+  "data": {
+	"trust": "<開示先のユーザーの ID>"
+  }
+}
+```
+
+
+### Response
+
+全員に以下のレスポンスが届く  
+request で指定されたユーザー ID に対しては、 `resistance` or `spy` が見える  
+それ以外のユーザーには、 `unknown` が届く  
+
+```json
+{
+  "status": "200",
+  "data": {
+	"trust": {
+	  "userId": "<リーダーのユーザー ID>",
+	  "role": "resistance || spy || unknown"
+	}
+  },
+  "state": "assigning-cards"
+}
+```
+
+
+## assign-plots
+
+リーダーが陰謀カードの割り当てを命令する  
+
+
+### Request
+
+```json
+{
+  "action": "assign-plots",
+  "data": {
+	"assign": [
+	  {
+		"plotId": "<陰謀カードの ID>",
+		"userId": "<ユーザーの ID>"
+	  },
+	  ...
+	]
+  }
+}
+```
+
+
+### Response
+
+全員に以下のレスポンスが届く  
+即時に使用するカードがなければ `assign-mission` へ遷移する  
+
+```json
+{
+  "status": "200",
+  "data": {
+	"assigned": [
+	  {
+		"plotId": "<陰謀カードの ID>",
+		"userId": "<ユーザーの ID>"
+	  },
+	  ...
+	]
+  }
+  "state": "immediate-effect || assigning-mission"
+}
+```
+
+
+## execte-disclosure
+
+「情報開示」の施行  
+
+
+### Request
+
+```json
+{
+  "action": "execte-disclosure",
+  "data": {
+	"disclosure": "<開示先のユーザーの ID>"
+  }
+}
+```
+
+
+### Response
+
+全員に以下のレスポンスが届く  
+request で指定されたユーザー ID に対しては、 `resistance` or `spy` が見える  
+それ以外のユーザーには、 `unknown` が届く  
+
+```json
+{
+  "status": "200",
+  "data": {
+	"trust": {
+	  "userId": "<役割が開示されたユーザーの ID>",
+	  "role": "resistance || spy || unknown"
+	}
+  },
+  "state": "immediate-effect || assigning-mission"
+}
+```
+
+
+## execte-responsible
+
+「責任者」の施行  
+
+
+### Request
+
+```json
+{
+  "action": "execte-responsible",
+  "data": {
+	"responsible": {
+	  "userId": "<引き受けり元のユーザー ID>",
+	  "plotId": "<引き取った陰謀カードの ID>"
+	}
   }
 }
 ```
@@ -309,25 +502,360 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 {
   "status": "200",
   "data": {
-	"roles": [
-	  {
-		"userId": "<ユーザーの ID>",
-		"userName": "<ユーザーの名前>",
-		"role": "resistance || spy || unknown"
-	  },
-	  ...
-	],
-	"firstLeader": "<最初のリーダーのユーザー ID>"
-  }
-  "state": "cards"
+	"resposible": {
+	  "sourceInfo": {
+		"userId": "<引き受けり元のユーザー ID>",
+		"plotId": "<引き取った陰謀カードの ID>"
+	  }
+	  "destinationUserId": "<引き受けり先のユーザー ID>"
+	}
+  },
+  "state": "immediate-effect || assigning-mission"
 }
 ```
 
 
-## distribute-cards
+## execte-eavesdrop
+
+「立ち聞きされた会話」の施行  
 
 
-# ステート管理
+### Request
 
-ユーザー側からの明示的なリクエストは発生しないが、全員が同一の画面を表示させるために  
+左右が定義されて、指定可能なユーザーかどうかの validation をサーバーサイドで行う  
+
+```json
+{
+  "action": "execte-eavesdrop",
+  "data": {
+	"disclosure": "<役割を見たいのユーザーの ID>"
+  }
+}
+```
+
+
+### Response
+
+全員に以下のレスポンスが届く  
+request したユーザーには、 `resistance` or `spy` が見える  
+それ以外のユーザーには、 `unknown` が届く  
+
+```json
+{
+  "status": "200",
+  "data": {
+	"trust": {
+	  "userId": "<役割が開示されたユーザーの ID>",
+	  "role": "resistance || spy || unknown"
+	}
+  },
+  "state": "immediate-effect || assigning-mission"
+}
+```
+
+
+## assign-mission
+
+リーダーがミッションの参加者を決定  
+
+
+### Request
+
+```json
+{
+  "action": "assign-mission",
+  "data": {
+	"assigned": ["<ミッションに参加するユーザー ID>",...]
+  }
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": "200",
+  "data": {
+	"assigned": ["<ミッションに参加するユーザー ID>",...]
+  },
+  "state": "prevoting"
+}
+```
+
+
+## prevote
+
+「総意の形成者」による投票  
+
+
+### Request
+
+```json
+{
+  "action": "prevote",
+  "data": {
+	"vote": "agree || disagree"
+  }
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": "200",
+  "data": {
+	"votes":[
+	  {
+		"userId": "<投票者のユーザーの ID>",
+		"vote": "agree || disagree"
+	  },
+	  ...
+	]
+  },
+  "state": "voting"
+}
+```
+
+
+## vote
+
+一般人による投票  
+
+
+### Request
+
+```json
+{
+  "action": "vote",
+  "data": {
+	"vote": "agree || disagree"
+  }
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": "200",
+  "data": {
+	"votes":[
+	  {
+		"userId": "<投票者のユーザーの ID>",
+		"vote": "agree || disagree"
+	  },
+	  ...
+	]
+  },
+  "state": "voting || wait-decline || wait-attention || running-mission"
+}
+```
+
+
+## decide-decline
+
+「不信」使用の意思決定  
+
+
+### Request
+
+```json
+{
+  "action": "decide-decline",
+  "data": {
+	"decline": true || false
+  }
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": 200,
+  "data": {
+	"decline": true || false
+  },
+  "state": "decide-attention || running-mission"
+}
+```
+
+
+## decide-attention
+
+「注目の的」使用の意思決定  
+
+
+### Request
+
+```json
+{
+  "action": "decide-decline",
+  "data": {
+	"attention": "<ユーザー ID> || None"
+  }
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": 200,
+  "data": {
+	"attention": "<ユーザー ID> || None"
+  },
+  "state": "running-mission"
+}
+```
+
+
+## deliver-mission
+
+ミッション参加者によるミッションカード選択  
+
+
+### Request
+
+```json
+{
+  "action": "decide-decline",
+  "data": {
+	"deliver": true || false
+  }
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": 200,
+  "data": {},
+  "state": "running-mission || wait-watcher || mission-completed"
+}
+```
+
+
+## decide-watcher
+
+「監視者」使用の意思決定  
+
+
+### Request
+
+```json
+{
+  "action": "decide-decline",
+  "data": {
+	"watch": "<ユーザー ID> || None"
+  }
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": 200,
+  "data": {
+	"watch": "<ユーザー ID> || None"
+  },
+  "state": "mission-completed"
+}
+```
+
+
+## mission-result
+
+ミッション結果の計算  
+
+
+### Request
+
+```json
+{
+  "action": "mission-result",
+  "data": {}
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": 200,
+  "data": {
+	"result": true || false
+  },
+  "state": "wait-next-leader"
+}
+```
+
+
+## decide-strong-leader
+
+「強力なリーダー」使用の意思決定  
+
+
+### Response
+
+```json
+{
+  "action": "decide-strong-leader",
+  "data": {
+	"strong-leader": true || false
+  }
+}
+```
+
+
+### Request
+
+```json
+{
+  "status": 200,
+  "data": {
+	"next-leader": "<ユーザー ID>",
+	"plots": [ "<陰謀カードの Id>", ... ]
+  },
+  "state": "checking-plot"
+}
+```
+
+
+## next-round
+
+
+### Response
+
+```json
+{
+  "action": "next-round",
+  "data": {}
+}
+```
+
+
+### Response
+
+```json
+{
+  "status": 200,
+  "data": {
+	"next-leader": "<ユーザー ID>",
+	"plots": [ "<陰謀カードの Id>", ... ]
+  },
+  "state": "checking-plot"
+}
+```
 
