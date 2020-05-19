@@ -2,8 +2,8 @@
 
 # はじめに
 
-Swagger にしようと思ったが、本プロジェクトは基本 Websocket の通信であり Path・HTTP メソッド定義が存在せず Swagger ではわかりにくいと思い普通に Markdown にする  
-そもそも、どんな API Gateway + Lambda における Websocket における仕組みがわからない場合には以下のドキュメントが有益  
+本プロジェクトは基本 Websocket の通信であり Path・HTTP メソッド定義が存在せず Swagger ではわかりにくいと思い普通に Markdown で書いた  
+API Gateway + Lambda における Websocket の仕組みがわからない場合には以下のドキュメントが有益  
 < https://dev.classmethod.jp/articles/api-gateway-websocket-serverless/ >  
 
 HTTP では、ユーザーの情報が欲しければ < http://endpoint.com/api/get-user?id=yoshiki > のような形でリクエストを行うが、  
@@ -23,6 +23,7 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 `data` の中に、 `action` で指定した処理で必要なデータが保存されている  
 
 そのため、このドキュメントではどういう `action` があるのか、その `action` に対してどういうパラメータが必要なのかを定義する  
+並びに、ゲームのステートと API の関係について述べる  
 
 
 # 前提
@@ -107,7 +108,7 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 
 <tr>
 <td class="org-right">5</td>
-<td class="org-left">assigning-cards</td>
+<td class="org-left">assigning-plots</td>
 <td class="org-left">陰謀カードの割り当てを行う</td>
 </tr>
 
@@ -128,7 +129,7 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 
 <tr>
 <td class="org-right">8</td>
-<td class="org-left">prevoting</td>
+<td class="org-left">wait-prevoting</td>
 <td class="org-left">「総意の形成者」の投票を待つ</td>
 </tr>
 
@@ -177,11 +178,18 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 
 <tr>
 <td class="org-right">15</td>
-<td class="org-left">wait-next-leader</td>
+<td class="org-left">wait-strong-leader</td>
 <td class="org-left">「強力なリーダー」の使用有無を待つ</td>
 </tr>
 </tbody>
 </table>
+
+
+## ステート図
+
+各ステートでどのような API が実行されるとどのステートに進むのかという話が定義されている  
+
+![API-State](https://github.com/k-yokoi/resistance_back/blob/yoshiki-dev/doc/api/api-state.jpeg)
 
 
 # ゲーム管理系
@@ -246,7 +254,7 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
   "data": {
 	"userId": "<join した参加者の User ID>"
   },
-  "state": "state"
+  "state": "ready"
 }
 ```
 
@@ -286,7 +294,6 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 		"userName": "<ユーザーの名前>",
 		"role": "resistance || spy || unknown"
 	  },
-	  ...
 	],
 	"firstLeader": "<最初のリーダーのユーザー ID>"
   },
@@ -319,7 +326,7 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 {
   "status": "200",
   "data": {
-	"plots": [ "<陰謀カードの Id>", ... ]
+	"plots": [ "<陰謀カードの Id>" ]
   },
   "state": "checking-plot"
 }
@@ -350,7 +357,7 @@ API Gateway + Lambda では、Websocket では確立したセッションに対�
 {
   "status": "200",
   "data": {},
-  "state": "wait-trust || assigning-cards"
+  "state": "wait-trust || assigning-plots"
 }
 ```
 
@@ -389,7 +396,7 @@ request で指定されたユーザー ID に対しては、 `resistance` or `sp
 	  "role": "resistance || spy || unknown"
 	}
   },
-  "state": "assigning-cards"
+  "state": "assigning-plots"
 }
 ```
 
@@ -410,7 +417,6 @@ request で指定されたユーザー ID に対しては、 `resistance` or `sp
 		"plotId": "<陰謀カードの ID>",
 		"userId": "<ユーザーの ID>"
 	  },
-	  ...
 	]
   }
 }
@@ -431,15 +437,14 @@ request で指定されたユーザー ID に対しては、 `resistance` or `sp
 		"plotId": "<陰謀カードの ID>",
 		"userId": "<ユーザーの ID>"
 	  },
-	  ...
 	]
   }
-  "state": "immediate-effect || assigning-mission"
+  "state": "wait-immediate-effect || assigning-mission"
 }
 ```
 
 
-## execte-disclosure
+## execute-disclosure
 
 「情報開示」の施行  
 
@@ -448,7 +453,7 @@ request で指定されたユーザー ID に対しては、 `resistance` or `sp
 
 ```json
 {
-  "action": "execte-disclosure",
+  "action": "execute-disclosure",
   "data": {
 	"disclosure": "<開示先のユーザーの ID>"
   }
@@ -471,12 +476,12 @@ request で指定されたユーザー ID に対しては、 `resistance` or `sp
 	  "role": "resistance || spy || unknown"
 	}
   },
-  "state": "immediate-effect || assigning-mission"
+  "state": "wat-immediate-effect || assigning-mission"
 }
 ```
 
 
-## execte-responsible
+## execute-responsible
 
 「責任者」の施行  
 
@@ -485,7 +490,7 @@ request で指定されたユーザー ID に対しては、 `resistance` or `sp
 
 ```json
 {
-  "action": "execte-responsible",
+  "action": "execute-responsible",
   "data": {
 	"responsible": {
 	  "userId": "<引き受けり元のユーザー ID>",
@@ -506,16 +511,16 @@ request で指定されたユーザー ID に対しては、 `resistance` or `sp
 	  "sourceInfo": {
 		"userId": "<引き受けり元のユーザー ID>",
 		"plotId": "<引き取った陰謀カードの ID>"
-	  }
+	  },
 	  "destinationUserId": "<引き受けり先のユーザー ID>"
 	}
   },
-  "state": "immediate-effect || assigning-mission"
+  "state": "wait-immediate-effect || assigning-mission"
 }
 ```
 
 
-## execte-eavesdrop
+## execute-eavesdrop
 
 「立ち聞きされた会話」の施行  
 
@@ -526,7 +531,7 @@ request で指定されたユーザー ID に対しては、 `resistance` or `sp
 
 ```json
 {
-  "action": "execte-eavesdrop",
+  "action": "execute-eavesdrop",
   "data": {
 	"disclosure": "<役割を見たいのユーザーの ID>"
   }
@@ -549,7 +554,7 @@ request したユーザーには、 `resistance` or `spy` が見える
 	  "role": "resistance || spy || unknown"
 	}
   },
-  "state": "immediate-effect || assigning-mission"
+  "state": "wait-immediate-effect || assigning-mission"
 }
 ```
 
@@ -565,7 +570,7 @@ request したユーザーには、 `resistance` or `spy` が見える
 {
   "action": "assign-mission",
   "data": {
-	"assigned": ["<ミッションに参加するユーザー ID>",...]
+	"assigned": [ "<ミッションに参加するユーザー ID>" ]
   }
 }
 ```
@@ -577,9 +582,9 @@ request したユーザーには、 `resistance` or `spy` が見える
 {
   "status": "200",
   "data": {
-	"assigned": ["<ミッションに参加するユーザー ID>",...]
+	"assigned": [ "<ミッションに参加するユーザー ID>" ]
   },
-  "state": "prevoting"
+  "state": "wait-prevoting || voting"
 }
 ```
 
@@ -612,10 +617,9 @@ request したユーザーには、 `resistance` or `spy` が見える
 		"userId": "<投票者のユーザーの ID>",
 		"vote": "agree || disagree"
 	  },
-	  ...
 	]
   },
-  "state": "voting"
+  "state": "wait-prevoting || voting"
 }
 ```
 
@@ -648,10 +652,9 @@ request したユーザーには、 `resistance` or `spy` が見える
 		"userId": "<投票者のユーザーの ID>",
 		"vote": "agree || disagree"
 	  },
-	  ...
 	]
   },
-  "state": "voting || wait-decline || wait-attention || running-mission"
+  "state": "voting || wait-decline || wait-attention || running-mission || wait-strong-leader || assigning-mission"
 }
 ```
 
@@ -667,7 +670,7 @@ request したユーザーには、 `resistance` or `spy` が見える
 {
   "action": "decide-decline",
   "data": {
-	"decline": true || false
+	"decline": "true || false"
   }
 }
 ```
@@ -675,13 +678,29 @@ request したユーザーには、 `resistance` or `spy` が見える
 
 ### Response
 
+利用する場合としない場合で次に移るステートが違う  
+
+利用する場合には、投票は否決となるので `wait-strong-leader` or `assigning-mission`  
+
 ```json
 {
   "status": 200,
   "data": {
-	"decline": true || false
+	"decline": true
   },
-  "state": "decide-attention || running-mission"
+  "state": "wait-strong-leader || assigning-mission"
+}
+```
+
+利用しない場合には、可決なのでミッションが始まる (`wait-attention` or `running-mission`)  
+
+```json
+{
+  "status": 200,
+  "data": {
+	"decline": false
+  },
+  "state": "wait-attention || running-mission"
 }
 ```
 
@@ -727,7 +746,7 @@ request したユーザーには、 `resistance` or `spy` が見える
 {
   "action": "decide-decline",
   "data": {
-	"deliver": true || false
+	"deliver": "true || false"
   }
 }
 ```
@@ -791,15 +810,34 @@ request したユーザーには、 `resistance` or `spy` が見える
 
 ### Response
 
+次のステートによって 2 種類に別れる  
+`wait-strong-leader` の場合  
+
 ```json
 {
   "status": 200,
   "data": {
-	"result": true || false
+	"missionSuccess": "true || false"
   },
-  "state": "wait-next-leader"
+  "state": "wait-strong-leader"
 }
 ```
+
+`checking-plot`  
+
+```json
+{
+  "status": 200,
+  "data": {
+	"next-leader": "<ユーザー ID>",
+	"plots": [ "<陰謀カードの Id>" ],
+	"missionSuccess": "true || false"
+  },
+  "state": "checking-plot"
+}
+```
+
+ここ少し気持ち悪いからステート増やしてもいいかも？  
 
 
 ## decide-strong-leader
@@ -807,45 +845,18 @@ request したユーザーには、 `resistance` or `spy` が見える
 「強力なリーダー」使用の意思決定  
 
 
-### Response
+### Request
 
 ```json
 {
   "action": "decide-strong-leader",
   "data": {
-	"strong-leader": true || false
+	"strong-leader": "true || false"
   }
 }
 ```
 
 
-### Request
-
-```json
-{
-  "status": 200,
-  "data": {
-	"next-leader": "<ユーザー ID>",
-	"plots": [ "<陰謀カードの Id>", ... ]
-  },
-  "state": "checking-plot"
-}
-```
-
-
-## next-round
-
-
-### Response
-
-```json
-{
-  "action": "next-round",
-  "data": {}
-}
-```
-
-
 ### Response
 
 ```json
@@ -853,7 +864,7 @@ request したユーザーには、 `resistance` or `spy` が見える
   "status": 200,
   "data": {
 	"next-leader": "<ユーザー ID>",
-	"plots": [ "<陰謀カードの Id>", ... ]
+	"plots": [ "<陰謀カードの Id>" ]
   },
   "state": "checking-plot"
 }
